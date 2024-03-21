@@ -6,3 +6,5 @@ conda env create -f environment.yml
 ## Activate
 To activate:
 source activate koreageonet
+## Data
+The data used in this study can be found at 10.5281/zenodo.10795252.
