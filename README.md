@@ -8,3 +8,5 @@ To activate:
 source activate koreageonet
 ## Data
 The data used in this study can be found at 10.5281/zenodo.10795252.
+## Additional Info
+Array locations can be found in Korea_Array_Locations.zip. Earthquake-Explosion databases as well as spreadsheets containing information on individual array detections can be found in Spreadsheets.zip.
