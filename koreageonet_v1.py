@@ -3641,12 +3641,12 @@ def GMU(x_s, x_i, HIDDEN_STATE_DIM=16):
 
 def x_vector(x, two_dim=True):
     '''---------------------------------------------------------------------------
-    Compute statistical vector of input (mean and standard deviation) (Snyder et al., 2018).
+    Compute statistical vector of input (mean and variance) (Snyder et al., 2018).
     ---------------------------------------------------------------------------'''
     if two_dim:
         x_mean = GlobalAveragePooling2D()(x)
         x_tmp = Subtract()([x,x_mean])
-        x_std = GlobalAveragePooling2D()(x_tmp**2)
+        x_var = GlobalAveragePooling2D()(x_tmp**2)
     else:
         try:
             x_mean = GlobalAveragePooling1D()(x)
@@ -3654,8 +3654,8 @@ def x_vector(x, two_dim=True):
             x = Reshape((1,x.shape[1]))(x)
             x_mean = GlobalAveragePooling1D()(x)
         x_tmp = Subtract()([x,x_mean])
-        x_std = GlobalAveragePooling1D()(x_tmp**2)
-    x = concatenate([x_mean,x_std])
+        x_var = GlobalAveragePooling1D()(x_tmp**2)
+    x = concatenate([x_mean,x_var])
     return x
 
 '------------------------------------------------------------------------------------------------------------------------------------------------------------------------'
