@@ -1,16 +1,11 @@
 '''
 KoreaGeonet - an array-based seismoacoustic deep learning fusion model
 
-Corresponding Author: Miro Ronac Giannone [mronacgiannone@smu.edu]
+Author: Miro Ronac Giannone [mronacgiannone@smu.edu]
+Co-authors: Stephen Arrowsmith [sarrowsmith@smu.edu] & Junghyun Park [junghyunp@smu.edu]
 ----------------------------------------------------------------------------------------------------------------------
-This script contains various functions necessary to run the code associated with Ronac Giannone et al. [2024].
-Paper co-authors:
-Stephen Arrowsmith[sarrowsmith@smu.edu]
-Junghyun Park [junghyunp@smu.edu]
-Brian Stump [stump@smu.edu]
-Chris Hayward [hayward@isem.smu.edu]
-Eric Larson [eclarson@lyle.smu.edu]
-Il-Young Che [che10@kigam.re.kr]
+This script lays the framework for a deep learning fusion model using seismoacoustic research arrays within the Korean peninsula.
+Current capabilites are limited to discriminating between surface explosions and earthquakes using 3 arrays [BRDAR, CHNAR, and KSGAR] within the network.
 
 Necessary files:
     Korea seismic velocity model - "kigam.tvel"
@@ -1250,37 +1245,31 @@ def augment_infrasound_training_data(X_train_infra, X_train_infra_T, X_test_infr
             Semb_resize = bilinear_resize(new_infra_data[:,:,2], new_h=X_train_infra[entry].shape[0], new_w=X_train_infra[entry].shape[1])
             #-----------------------------------------------------------------------------------------------------------------------#
             # Standardize data by channel
-            new_infra_data_tmp = np.zeros((X_train_infra[entry].shape[0], X_train_infra[entry].shape[1], X_train_infra[entry].shape[2]))
-            new_infra_data_tmp[:,:,0] = slowX_resize.copy(); new_infra_data_tmp[:,:,1] = slowY_resize.copy(); new_infra_data_tmp[:,:,2] = Semb_resize.copy()
+            new_infra_data_ss = np.zeros((X_train_infra[entry].shape[0], X_train_infra[entry].shape[1], X_train_infra[entry].shape[2]))
+            new_infra_data_ss[:,:,0] = slowX_resize.copy(); new_infra_data_ss[:,:,1] = slowY_resize.copy(); new_infra_data_ss[:,:,2] = Semb_resize.copy()
+            for channel in range(new_infra_data_ss.shape[2]):
+                ss = StandardScaler().fit(new_infra_data_ss[:,:,channel])
+                new_infra_data_ss[:,:,channel] = ss.transform(new_infra_data_ss[:,:,channel])
             #-----------------------------------------------------------------------------------------------------------------------#
             # Appending data
-            X_train_infra_aug.append(new_infra_data_tmp)
+            X_train_infra_aug.append(np.nan_to_num(new_infra_data_ss))
     #-----------------------------------------------------------------------------------------------------------------------#
-    # Standardize
-    X_train_infra_aug = np.array(X_train_infra_aug)
-    X_test_infra_ss = X_test_infra.copy()
-    scalers = [StandardScaler() for _ in range(X_train_infra_aug.shape[2])] # 3 scalers for each channel
-    # Fit scalers on training data and transform both training and test data
-    for i in range(X_train_infra_aug.shape[2]):
-        # Reshape the channel to fit the scaler
-        train_channel = X_train_infra_aug[:, :, i].reshape(-1, 1)
-        test_channel = X_test_infra_ss[:, :, i].reshape(-1, 1)
+    # Standardize test set
+    X_test_infra_ss = []
+    for entry in range(X_test_infra.shape[0]):
+        # Standardize data by channel
+        new_infra_test_ss = X_test_infra[entry].copy()
+        for channel in range(new_infra_test_ss.shape[2]):
+            ss = StandardScaler().fit(new_infra_test_ss[:,:,channel])
+            new_infra_test_ss[:,:,channel] = ss.transform(new_infra_test_ss[:,:,channel])
         #-----------------------------------------------------------------------------------------------------------------------#
-        # Fit and transform the training channel
-        scalers[i].fit(train_channel)
-        X_train_infra_aug[:, :, i] = scalers[i].transform(train_channel).reshape(X_train_infra_aug.shape[0], -1)
-        #-----------------------------------------------------------------------------------------------------------------------#
-        # Transform the test channel
-        X_test_infra_ss[:, :, i] = scalers[i].transform(test_channel).reshape(X_test_infra_ss.shape[0], -1)      
+        # Appending data
+        X_test_infra_ss.append(np.nan_to_num(new_infra_test_ss))
     #-----------------------------------------------------------------------------------------------------------------------#
-    # Remove potentional nan values  
-    X_train_infra_aug_ss = np.nan_to_num(X_train_infra_aug)
-    X_test_infra_ss = np.nan_to_num(X_test_infra)
+    print('Train dataset size is: ' + str(np.array(X_train_infra_aug).shape[0]))
+    print('Test dataset size is: ' + str(np.array(X_test_infra_ss).shape[0]))
     #-----------------------------------------------------------------------------------------------------------------------#
-    print('Train dataset size is: ' + str(X_train_infra_aug_ss).shape[0])
-    print('Test dataset size is: ' + str(X_test_infra_ss).shape[0])
-    #-----------------------------------------------------------------------------------------------------------------------#
-    return X_train_infra_aug_ss, X_test_infra_ss
+    return np.array(X_train_infra_aug), np.array(X_test_infra_ss)
 
 '------------------------------------------------------------------------------------------------------------------------------------------------------------------------'
 
@@ -3641,12 +3630,12 @@ def GMU(x_s, x_i, HIDDEN_STATE_DIM=16):
 
 def x_vector(x, two_dim=True):
     '''---------------------------------------------------------------------------
-    Compute statistical vector of input (mean and variance) (Snyder et al., 2018).
+    Compute statistical vector of input (mean and standard deviation) (Snyder et al., 2018).
     ---------------------------------------------------------------------------'''
     if two_dim:
         x_mean = GlobalAveragePooling2D()(x)
         x_tmp = Subtract()([x,x_mean])
-        x_var = GlobalAveragePooling2D()(x_tmp**2)
+        x_std = GlobalAveragePooling2D()(x_tmp**2)
     else:
         try:
             x_mean = GlobalAveragePooling1D()(x)
@@ -3654,8 +3643,8 @@ def x_vector(x, two_dim=True):
             x = Reshape((1,x.shape[1]))(x)
             x_mean = GlobalAveragePooling1D()(x)
         x_tmp = Subtract()([x,x_mean])
-        x_var = GlobalAveragePooling1D()(x_tmp**2)
-    x = concatenate([x_mean,x_var])
+        x_std = GlobalAveragePooling1D()(x_tmp**2)
+    x = concatenate([x_mean,x_std])
     return x
 
 '------------------------------------------------------------------------------------------------------------------------------------------------------------------------'
